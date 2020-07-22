@@ -16,42 +16,45 @@
 
 package android_serialport_api.sample;
 
-import java.io.IOException;
-
 import android.os.Bundle;
-import android.view.KeyEvent;
+import android.view.View;
 import android.widget.EditText;
-import android.widget.TextView;
-import android.widget.TextView.OnEditorActionListener;
+import android.widget.Toast;
+
+import java.io.IOException;
 
 public class ConsoleActivity extends SerialPortActivity {
 
 	EditText mReception;
+	EditText mEmission;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.console);
 
-//		setTitle("Loopback test");
 		mReception = (EditText) findViewById(R.id.EditTextReception);
-
-		EditText Emission = (EditText) findViewById(R.id.EditTextEmission);
-		Emission.setOnEditorActionListener(new OnEditorActionListener() {
-			public boolean onEditorAction(TextView v, int actionId, KeyEvent event) {
-				int i;
-				CharSequence t = v.getText();
-				char[] text = new char[t.length()];
-				for (i=0; i<t.length(); i++) {
-					text[i] = t.charAt(i);
+		mEmission = (EditText) findViewById(R.id.EditTextEmission);
+		mEmission.requestFocus();
+		findViewById(R.id.SendBtn).setOnClickListener(new View.OnClickListener() {
+			@Override
+			public void onClick(View v) {
+				byte[] data = null;
+				try {
+					data = HexDump.hexStringToByteArray(mEmission.getText().toString());
+					if (data.length <= 0) {
+						Toast.makeText(ConsoleActivity.this, "请输入16进制字符", Toast.LENGTH_SHORT).show();
+					}
+				} catch (Exception e) {
+					e.printStackTrace();
+					Toast.makeText(ConsoleActivity.this, "请输入16进制字符", Toast.LENGTH_SHORT).show();
 				}
 				try {
-					mOutputStream.write(new String(text).getBytes());
-					mOutputStream.write('\n');
+					mOutputStream.write(data);
 				} catch (IOException e) {
 					e.printStackTrace();
+					Toast.makeText(ConsoleActivity.this, "发送失败", Toast.LENGTH_SHORT).show();
 				}
-				return false;
 			}
 		});
 	}
@@ -61,7 +64,7 @@ public class ConsoleActivity extends SerialPortActivity {
 		runOnUiThread(new Runnable() {
 			public void run() {
 				if (mReception != null) {
-					mReception.append(new String(buffer, 0, size));
+					mReception.append(HexDump.toHexString(buffer, 0, size));
 				}
 			}
 		});
