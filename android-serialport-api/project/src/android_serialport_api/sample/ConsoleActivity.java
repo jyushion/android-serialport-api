@@ -39,19 +39,22 @@ public class ConsoleActivity extends SerialPortActivity {
 		findViewById(R.id.SendBtn).setOnClickListener(new View.OnClickListener() {
 			@Override
 			public void onClick(View v) {
-				byte[] data = null;
+//				byte[] data = null;
+//				try {
+//					data = HexDump.hexStringToByteArray(mEmission.getText().toString());
+//					if (data.length <= 0) {
+//						Toast.makeText(ConsoleActivity.this, "请输入16进制字符", Toast.LENGTH_SHORT).show();
+//					}
+//				} catch (Exception e) {
+//					e.printStackTrace();
+//					Toast.makeText(ConsoleActivity.this, "请输入16进制字符", Toast.LENGTH_SHORT).show();
+//				}
 				try {
-					data = HexDump.hexStringToByteArray(mEmission.getText().toString());
-					if (data.length <= 0) {
-						Toast.makeText(ConsoleActivity.this, "请输入16进制字符", Toast.LENGTH_SHORT).show();
-					}
+					//mOutputStream.write(data);
+					mOutputStream.write(HexDump.hexStringToByteArray("AA550003FFFC0300FE00FE"));
+					Thread.sleep(2000);
+					mOutputStream.write(HexDump.hexStringToByteArray("AA550002FFFD03000101"));
 				} catch (Exception e) {
-					e.printStackTrace();
-					Toast.makeText(ConsoleActivity.this, "请输入16进制字符", Toast.LENGTH_SHORT).show();
-				}
-				try {
-					mOutputStream.write(data);
-				} catch (IOException e) {
 					e.printStackTrace();
 					Toast.makeText(ConsoleActivity.this, "发送失败", Toast.LENGTH_SHORT).show();
 				}
