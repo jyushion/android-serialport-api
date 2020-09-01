@@ -15,6 +15,7 @@
  */
 
 #include <termios.h>
+#include <linux/serial.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -82,7 +83,7 @@ static speed_t getBaudrate(jint baudrate)
 
 int set_opt(int fd, jint nBits, jchar nEvent, jint nStop) {
 
-    LOGE("set_opt:nBits=%d,nEvent=%c,nSpeed=%d,nStop=%d", nBits, nEvent, nStop);
+    LOGE("set_opt:nBits=%d,nEvent=%c,nStop=%d", nBits, nEvent, nStop);
 
     struct termios newtio;
 
@@ -213,7 +214,7 @@ int set_opt(int fd, jint nBits, jchar nEvent, jint nStop) {
  * Method:    open
  * Signature: (Ljava/lang/String;II)Ljava/io/FileDescriptor;
  */
-JNIEXPORT jobject JNICALL Java_android_serialport_SerialPort_open
+JNIEXPORT jobject JNICALL Java_android_1serialport_1api_SerialPort_open
         (JNIEnv *env, jclass thiz, jstring path, jint baudrate, jint databits, jint stopbits,
          jchar parity) {
     int fd;
@@ -232,11 +233,11 @@ JNIEXPORT jobject JNICALL Java_android_serialport_SerialPort_open
 
     /* Opening device */
     {
-        jint flags = O_RDWR | O_NONBLOCK;
+        jint flags = O_NOCTTY;
         jboolean iscopy;
         const char *path_utf = (*env)->GetStringUTFChars(env, path, &iscopy);
-        LOGD("Opening serial port %s with flags 0x%x", path_utf, flags);
-        fd = open(path_utf, flags);
+        LOGD("Opening serial port %s with flags 0x%x", path_utf, O_RDWR | flags);
+        fd = open(path_utf, O_RDWR | flags);
         LOGD("open() fd = %d", fd);
         (*env)->ReleaseStringUTFChars(env, path, path_utf);
         if (fd == -1) {
@@ -246,6 +247,24 @@ JNIEXPORT jobject JNICALL Java_android_serialport_SerialPort_open
             return NULL;
         }
     }
+
+    // 设置内存缓冲区大小
+//    {
+//        struct serial_struct serial;
+//        int ret = ioctl(fd, TIOCGSERIAL, &serial);
+//        if (ret != 0) {
+//            LOGE("Cannot setup ioctl");
+//            close(fd);
+//            return NULL;
+//        }
+//        serial.xmit_fifo_size = 1024 * 1024; //1M
+//        ret = ioctl(fd, TIOCSSERIAL, &serial);
+//        if(ret != 0) {
+//            LOGE("Cannot setup ioctl");
+//            close(fd);
+//            return NULL;
+//        }
+//    }
 
     /* Configure device */
     {
@@ -271,7 +290,7 @@ JNIEXPORT jobject JNICALL Java_android_serialport_SerialPort_open
         }
 
         //配置校验位 停止位等等
-        set_opt(fd, databits, parity, stopbits);
+        //set_opt(fd, databits, parity, stopbits);
     }
 
     /* Create a corresponding file descriptor */
