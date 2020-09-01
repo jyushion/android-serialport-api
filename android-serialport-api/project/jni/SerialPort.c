@@ -68,80 +68,222 @@ static speed_t getBaudrate(jint baudrate)
 	}
 }
 
+/**
+
+ * 设置串口数据，校验位,速率，停止位
+
+ * @param nBits 类型 int数据位 取值 位7或8
+
+ * @param nEvent 类型 char 校验类型 取值N ,E, O,,S
+
+ * @param mStop 类型 int 停止位 取值1 或者 2
+
+ */
+
+int set_opt(int fd, jint nBits, jchar nEvent, jint nStop) {
+
+    LOGE("set_opt:nBits=%d,nEvent=%c,nSpeed=%d,nStop=%d", nBits, nEvent, nStop);
+
+    struct termios newtio;
+
+    if (tcgetattr(fd, &newtio) != 0) {
+
+        LOGE("setup serial failure");
+
+        return -1;
+
+    }
+
+    bzero(&newtio, sizeof(newtio));
+
+    //c_cflag标志可以定义CLOCAL和CREAD，这将确保该程序不被其他端口控制和信号干扰，同时串口驱动将读取进入的数据。CLOCAL和CREAD通常总是被是能的
+
+    newtio.c_cflag |= CLOCAL | CREAD;
+
+
+    switch (nBits) //设置数据位数
+    {
+
+        case 7:
+
+            newtio.c_cflag &= ~CSIZE;
+
+            newtio.c_cflag |= CS7;
+
+            break;
+
+        case 8:
+
+            newtio.c_cflag &= ~CSIZE;
+
+            newtio.c_cflag |= CS8;
+
+            break;
+
+        default:
+
+
+            break;
+
+    }
+
+    switch (nEvent) //设置校验位
+    {
+
+        case 'O':
+
+            newtio.c_cflag |= PARENB; //enable parity checking
+
+            newtio.c_cflag |= PARODD; //奇校验位
+
+            newtio.c_iflag |= (INPCK | ISTRIP);
+
+
+            break;
+
+        case 'E':
+
+            newtio.c_cflag |= PARENB; //
+
+            newtio.c_cflag &= ~PARODD; //偶校验位
+
+            newtio.c_iflag |= (INPCK | ISTRIP);
+
+
+            break;
+
+        case 'N':
+
+            newtio.c_cflag &= ~PARENB; //清除校验位
+
+
+
+            break;
+
+
+        default:
+
+
+            break;
+
+    }
+    switch (nStop) //设置停止位
+    {
+
+        case 1:
+
+            newtio.c_cflag &= ~CSTOPB;
+
+            break;
+
+        case 2:
+
+            newtio.c_cflag |= CSTOPB;
+
+            break;
+
+        default:
+
+            // LOGW("nStop:%d,invalid param", nStop);
+
+            break;
+
+    }
+
+    newtio.c_cc[VTIME] = 0;//设置等待时间
+
+    newtio.c_cc[VMIN] = 0;//设置最小接收字符
+
+    tcflush(fd, TCIFLUSH);
+
+    if (tcsetattr(fd, TCSANOW, &newtio) != 0) {
+
+        LOGE("options set error");
+
+        return -1;
+
+    }
+
+    LOGE("options set success");
+    return 1;
+}
+
 /*
  * Class:     android_serialport_SerialPort
  * Method:    open
  * Signature: (Ljava/lang/String;II)Ljava/io/FileDescriptor;
  */
-JNIEXPORT jobject JNICALL Java_android_1serialport_1api_SerialPort_open
-  (JNIEnv *env, jclass thiz, jstring path, jint baudrate, jint flags)
-{
-	int fd;
-	speed_t speed;
-	jobject mFileDescriptor;
+JNIEXPORT jobject JNICALL Java_android_serialport_SerialPort_open
+        (JNIEnv *env, jclass thiz, jstring path, jint baudrate, jint databits, jint stopbits,
+         jchar parity) {
+    int fd;
+    speed_t speed;
+    jobject mFileDescriptor;
 
-	/* Check arguments */
-	{
-		speed = getBaudrate(baudrate);
-		if (speed == -1) {
-			/* TODO: throw an exception */
-			LOGE("Invalid baudrate");
-			return NULL;
-		}
-	}
+    /* Check arguments */
+    {
+        speed = getBaudrate(baudrate);
+        if (speed == -1) {
+            /* TODO: throw an exception */
+            LOGE("Invalid baudrate");
+            return NULL;
+        }
+    }
 
-	/* Opening device */
-	{
-		jboolean iscopy;
-		const char *path_utf = (*env)->GetStringUTFChars(env, path, &iscopy);
-		LOGD("Opening serial port %s with flags 0x%x", path_utf, O_RDWR | flags);
-		fd = open(path_utf, O_RDWR | flags);
-		LOGD("open() fd = %d", fd);
-		(*env)->ReleaseStringUTFChars(env, path, path_utf);
-		if (fd == -1)
-		{
-			/* Throw an exception */
-			LOGE("Cannot open port");
-			/* TODO: throw an exception */
-			return NULL;
-		}
-	}
+    /* Opening device */
+    {
+        jint flags = O_RDWR | O_NONBLOCK;
+        jboolean iscopy;
+        const char *path_utf = (*env)->GetStringUTFChars(env, path, &iscopy);
+        LOGD("Opening serial port %s with flags 0x%x", path_utf, flags);
+        fd = open(path_utf, flags);
+        LOGD("open() fd = %d", fd);
+        (*env)->ReleaseStringUTFChars(env, path, path_utf);
+        if (fd == -1) {
+            /* Throw an exception */
+            LOGE("Cannot open port");
+            /* TODO: throw an exception */
+            return NULL;
+        }
+    }
 
-	/* Configure device */
-	{
-		struct termios cfg;
-		LOGD("Configuring serial port");
-		if (tcgetattr(fd, &cfg))
-		{
-			LOGE("tcgetattr() failed");
-			close(fd);
-			/* TODO: throw an exception */
-			return NULL;
-		}
+    /* Configure device */
+    {
+        struct termios cfg;
+        LOGD("Configuring serial port");
+        if (tcgetattr(fd, &cfg)) {
+            LOGE("tcgetattr() failed");
+            close(fd);
+            /* TODO: throw an exception */
+            return NULL;
+        }
 
-		cfmakeraw(&cfg);
-		cfsetispeed(&cfg, speed);
-		cfsetospeed(&cfg, speed);
+        cfmakeraw(&cfg);
+        //设置波特率
+        cfsetispeed(&cfg, speed);
+        cfsetospeed(&cfg, speed);
 
-		if (tcsetattr(fd, TCSANOW, &cfg))
-		{
-			LOGE("tcsetattr() failed");
-			close(fd);
-			/* TODO: throw an exception */
-			return NULL;
-		}
-	}
+        if (tcsetattr(fd, TCSANOW, &cfg)) {
+            LOGE("tcsetattr() failed");
+            close(fd);
+            /* TODO: throw an exception */
+            return NULL;
+        }
 
-	/* Create a corresponding file descriptor */
-	{
-		jclass cFileDescriptor = (*env)->FindClass(env, "java/io/FileDescriptor");
-		jmethodID iFileDescriptor = (*env)->GetMethodID(env, cFileDescriptor, "<init>", "()V");
-		jfieldID descriptorID = (*env)->GetFieldID(env, cFileDescriptor, "descriptor", "I");
-		mFileDescriptor = (*env)->NewObject(env, cFileDescriptor, iFileDescriptor);
-		(*env)->SetIntField(env, mFileDescriptor, descriptorID, (jint)fd);
-	}
+        //配置校验位 停止位等等
+        set_opt(fd, databits, parity, stopbits);
+    }
 
-	return mFileDescriptor;
+    /* Create a corresponding file descriptor */
+    {
+        jclass cFileDescriptor = (*env)->FindClass(env, "java/io/FileDescriptor");
+        jmethodID iFileDescriptor = (*env)->GetMethodID(env, cFileDescriptor, "<init>", "()V");
+        jfieldID descriptorID = (*env)->GetFieldID(env, cFileDescriptor, "descriptor", "I");
+        mFileDescriptor = (*env)->NewObject(env, cFileDescriptor, iFileDescriptor);
+        (*env)->SetIntField(env, mFileDescriptor, descriptorID, (jint) fd);
+    }
+
+    return mFileDescriptor;
 }
 
 /*
@@ -150,18 +292,17 @@ JNIEXPORT jobject JNICALL Java_android_1serialport_1api_SerialPort_open
  * Signature: ()V
  */
 JNIEXPORT void JNICALL Java_android_1serialport_1api_SerialPort_close
-  (JNIEnv *env, jobject thiz)
-{
-	jclass SerialPortClass = (*env)->GetObjectClass(env, thiz);
-	jclass FileDescriptorClass = (*env)->FindClass(env, "java/io/FileDescriptor");
+        (JNIEnv *env, jobject thiz) {
+    jclass SerialPortClass = (*env)->GetObjectClass(env, thiz);
+    jclass FileDescriptorClass = (*env)->FindClass(env, "java/io/FileDescriptor");
 
-	jfieldID mFdID = (*env)->GetFieldID(env, SerialPortClass, "mFd", "Ljava/io/FileDescriptor;");
-	jfieldID descriptorID = (*env)->GetFieldID(env, FileDescriptorClass, "descriptor", "I");
+    jfieldID mFdID = (*env)->GetFieldID(env, SerialPortClass, "mFd", "Ljava/io/FileDescriptor;");
+    jfieldID descriptorID = (*env)->GetFieldID(env, FileDescriptorClass, "descriptor", "I");
 
-	jobject mFd = (*env)->GetObjectField(env, thiz, mFdID);
-	jint descriptor = (*env)->GetIntField(env, mFd, descriptorID);
+    jobject mFd = (*env)->GetObjectField(env, thiz, mFdID);
+    jint descriptor = (*env)->GetIntField(env, mFd, descriptorID);
 
-	LOGD("close(fd = %d)", descriptor);
-	close(descriptor);
+    LOGD("close(fd = %d)", descriptor);
+    close(descriptor);
 }
 
