@@ -15,12 +15,10 @@
  */
 
 #include <termios.h>
-#include <linux/serial.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <string.h>
 #include <jni.h>
 
 #include "SerialPort.h"
@@ -69,146 +67,6 @@ static speed_t getBaudrate(jint baudrate)
 	}
 }
 
-/**
-
- * 设置串口数据，校验位,速率，停止位
-
- * @param nBits 类型 int数据位 取值 位7或8
-
- * @param nEvent 类型 char 校验类型 取值N ,E, O,,S
-
- * @param mStop 类型 int 停止位 取值1 或者 2
-
- */
-
-int set_opt(int fd, jint nBits, jchar nEvent, jint nStop) {
-
-    LOGE("set_opt:nBits=%d,nEvent=%c,nStop=%d", nBits, nEvent, nStop);
-
-    struct termios newtio;
-
-    if (tcgetattr(fd, &newtio) != 0) {
-
-        LOGE("setup serial failure");
-
-        return -1;
-
-    }
-
-    bzero(&newtio, sizeof(newtio));
-
-    //c_cflag标志可以定义CLOCAL和CREAD，这将确保该程序不被其他端口控制和信号干扰，同时串口驱动将读取进入的数据。CLOCAL和CREAD通常总是被是能的
-
-    newtio.c_cflag |= CLOCAL | CREAD;
-
-
-    switch (nBits) //设置数据位数
-    {
-
-        case 7:
-
-            newtio.c_cflag &= ~CSIZE;
-
-            newtio.c_cflag |= CS7;
-
-            break;
-
-        case 8:
-
-            newtio.c_cflag &= ~CSIZE;
-
-            newtio.c_cflag |= CS8;
-
-            break;
-
-        default:
-
-
-            break;
-
-    }
-
-    switch (nEvent) //设置校验位
-    {
-
-        case 'O':
-
-            newtio.c_cflag |= PARENB; //enable parity checking
-
-            newtio.c_cflag |= PARODD; //奇校验位
-
-            newtio.c_iflag |= (INPCK | ISTRIP);
-
-
-            break;
-
-        case 'E':
-
-            newtio.c_cflag |= PARENB; //
-
-            newtio.c_cflag &= ~PARODD; //偶校验位
-
-            newtio.c_iflag |= (INPCK | ISTRIP);
-
-
-            break;
-
-        case 'N':
-
-            newtio.c_cflag &= ~PARENB; //清除校验位
-
-
-
-            break;
-
-
-        default:
-
-
-            break;
-
-    }
-    switch (nStop) //设置停止位
-    {
-
-        case 1:
-
-            newtio.c_cflag &= ~CSTOPB;
-
-            break;
-
-        case 2:
-
-            newtio.c_cflag |= CSTOPB;
-
-            break;
-
-        default:
-
-            // LOGW("nStop:%d,invalid param", nStop);
-
-            break;
-
-    }
-
-    newtio.c_cc[VTIME] = 0;//设置等待时间
-
-    newtio.c_cc[VMIN] = 0;//设置最小接收字符
-
-    tcflush(fd, TCIFLUSH);
-
-    if (tcsetattr(fd, TCSANOW, &newtio) != 0) {
-
-        LOGE("options set error");
-
-        return -1;
-
-    }
-
-    LOGE("options set success");
-    return 1;
-}
-
 /*
  * Class:     android_serialport_SerialPort
  * Method:    open
@@ -233,11 +91,10 @@ JNIEXPORT jobject JNICALL Java_android_1serialport_1api_SerialPort_open
 
     /* Opening device */
     {
-        jint flags = O_NOCTTY;
         jboolean iscopy;
         const char *path_utf = (*env)->GetStringUTFChars(env, path, &iscopy);
-        LOGD("Opening serial port %s with flags 0x%x", path_utf, O_RDWR | flags);
-        fd = open(path_utf, O_RDWR | flags);
+        LOGD("Opening serial port %s with flags 0x%x", path_utf, O_RDWR | O_NOCTTY);
+        fd = open(path_utf, O_RDWR | O_NOCTTY);
         LOGD("open() fd = %d", fd);
         (*env)->ReleaseStringUTFChars(env, path, path_utf);
         if (fd == -1) {
@@ -247,24 +104,6 @@ JNIEXPORT jobject JNICALL Java_android_1serialport_1api_SerialPort_open
             return NULL;
         }
     }
-
-    // 设置内存缓冲区大小
-//    {
-//        struct serial_struct serial;
-//        int ret = ioctl(fd, TIOCGSERIAL, &serial);
-//        if (ret != 0) {
-//            LOGE("Cannot setup ioctl");
-//            close(fd);
-//            return NULL;
-//        }
-//        serial.xmit_fifo_size = 1024 * 1024; //1M
-//        ret = ioctl(fd, TIOCSSERIAL, &serial);
-//        if(ret != 0) {
-//            LOGE("Cannot setup ioctl");
-//            close(fd);
-//            return NULL;
-//        }
-//    }
 
     /* Configure device */
     {
@@ -278,9 +117,68 @@ JNIEXPORT jobject JNICALL Java_android_1serialport_1api_SerialPort_open
         }
 
         cfmakeraw(&cfg);
+
         //设置波特率
         cfsetispeed(&cfg, speed);
         cfsetospeed(&cfg, speed);
+
+        //设置数据位数
+        cfg.c_cflag &= ~CSIZE;
+        switch (databits)
+        {
+            case 7:
+                cfg.c_cflag |= CS7;
+                break;
+            case 8:
+                cfg.c_cflag |= CS8;
+                break;
+            default:
+                break;
+        }
+
+        //设置停止位
+        switch (stopbits)
+        {
+            case 1:
+                cfg.c_cflag &= ~CSTOPB;
+                break;
+            case 2:
+                cfg.c_cflag |= CSTOPB;
+                break;
+            default:
+                break;
+        }
+
+        //设置校验位
+        switch (parity)
+        {
+            case 'o':
+            case 'O':
+                cfg.c_cflag |= PARENB; //enable parity checking
+                cfg.c_cflag |= PARODD; //奇校验位
+                cfg.c_iflag |= (INPCK | ISTRIP);
+                break;
+            case 'e':
+            case 'E':
+                cfg.c_cflag |= PARENB; //
+                cfg.c_cflag &= ~PARODD; //偶校验位
+                cfg.c_iflag |= (INPCK | ISTRIP);
+                break;
+            case 'n':
+            case 'N':
+                cfg.c_cflag &= ~PARENB; //清除校验位
+                break;
+            default:
+                break;
+        }
+
+        // c_cflag标志可以定义CLOCAL和CREAD，这将确保该程序不被其他端口控制和信号干扰，同时串口驱动将读取进入的数据。CLOCAL和CREAD通常总是被是能的。
+        cfg.c_cflag |= (CLOCAL | CREAD);
+        cfg.c_iflag &= ~(IGNBRK|BRKINT|PARMRK|ISTRIP|INLCR|IGNCR|ICRNL|IXON|IXOFF|IXANY);
+        cfg.c_oflag &= ~OPOST; // 使用原始输出
+        cfg.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG); // 选择原始模式
+        cfg.c_cc[VTIME] = 0; //设置等待时间
+        cfg.c_cc[VMIN] = 1; //设置最小接收字符
 
         if (tcsetattr(fd, TCSANOW, &cfg)) {
             LOGE("tcsetattr() failed");
@@ -288,9 +186,6 @@ JNIEXPORT jobject JNICALL Java_android_1serialport_1api_SerialPort_open
             /* TODO: throw an exception */
             return NULL;
         }
-
-        //配置校验位 停止位等等
-        //set_opt(fd, databits, parity, stopbits);
     }
 
     /* Create a corresponding file descriptor */

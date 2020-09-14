@@ -17,6 +17,7 @@
 package android_serialport_api.sample;
 
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.Toast;
@@ -24,6 +25,8 @@ import android.widget.Toast;
 import java.io.IOException;
 
 public class ConsoleActivity extends SerialPortActivity {
+
+	private static final String TAG = "ConsoleActivity";
 
 	EditText mReception;
 	EditText mEmission;
@@ -51,8 +54,10 @@ public class ConsoleActivity extends SerialPortActivity {
 //				}
 				try {
 					//mOutputStream.write(data);
+					Log.d(TAG, "write: AA550003FFFC0300FE00FE");
 					mOutputStream.write(HexDump.hexStringToByteArray("AA550003FFFC0300FE00FE"));
 					Thread.sleep(2000);
+					Log.d(TAG, "write: AA550002FFFD03000101");
 					mOutputStream.write(HexDump.hexStringToByteArray("AA550002FFFD03000101"));
 				} catch (Exception e) {
 					e.printStackTrace();
